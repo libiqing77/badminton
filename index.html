@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>羽毛球实时统计</title>
+<style>
+/* ===================== 基础 ===================== */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0F1419; --card:#1A2029; --card2:#222A35; --line:#2C3644;
+  --txt:#E8EDF2; --sub:#8A96A6; --accent:#3C8DDE;
+  --ok:#3FB874; --warn:#E8934A; --red:#E05555; --purple:#A57BD8;
+}
+body{
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--txt);
+  padding:0 0 calc(30px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:680px;margin:0 auto;padding:0 12px}
+
+/* ===================== 顶栏 ===================== */
+.hd{
+  background:linear-gradient(135deg,#1B3A5C,#2C5F8F);
+  padding:calc(18px + env(safe-area-inset-top)) 18px 16px;
+  position:sticky; top:0; z-index:50;
+}
+.hd h1{font-size:19px;font-weight:700;letter-spacing:.3px}
+.hd .st{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:12.5px;opacity:.9}
+.dot{width:8px;height:8px;border-radius:50%;background:#6B7480;flex:none}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.dot.busy{background:var(--warn);animation:bl .8s infinite}
+@keyframes bl{50%{opacity:.25}}
+
+/* ===================== 按钮 ===================== */
+.btn{
+  display:block;width:100%;padding:15px;border:none;border-radius:13px;
+  background:var(--accent);color:#fff;font-size:16px;font-weight:700;
+  margin-top:13px;cursor:pointer;font-family:inherit;
+}
+.btn:active{opacity:.75}
+.btn.gray{background:var(--card2);color:var(--sub)}
+.btn.red{background:var(--red)}
+
+/* ===================== 卡片 ===================== */
+.card{background:var(--card);border-radius:15px;margin-top:13px;padding:15px}
+.card h2{font-size:14px;color:var(--sub);font-weight:600;margin-bottom:12px;
+  letter-spacing:.5px}
+
+/* ===================== 统计网格 ===================== */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.cell{background:var(--card2);border-radius:11px;padding:13px 6px;text-align:center}
+.cell b{display:block;font-size:24px;font-weight:700;line-height:1.15;
+  font-variant-numeric:tabular-nums}
+.cell span{font-size:11px;color:var(--sub);margin-top:2px;display:block}
+.c-total b{color:var(--txt)} .c-smash b{color:var(--red)}
+.c-over b{color:var(--warn)} .c-under b{color:var(--ok)}
+.c-back b{color:var(--accent)} .c-spd b{color:var(--purple)}
+.c-flat b{color:#98A6B8}.c-miss b{color:var(--warn)}.c-event b{color:var(--txt)}
+
+/* ===================== 图表 ===================== */
+canvas{width:100%;display:block;border-radius:8px}
+.lg{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-size:11.5px;color:var(--sub)}
+.lg i{display:inline-block;width:11px;height:11px;border-radius:3px;
+  margin-right:5px;vertical-align:-1px}
+
+/* ===================== 列表 ===================== */
+.row{display:flex;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.tag{width:56px;height:30px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:700;flex:none;color:#fff}
+.row .mid{flex:1;margin-left:11px;min-width:0}
+.row .mid b{font-size:14.5px;display:block;font-weight:600}
+.row .mid span{font-size:11.5px;color:var(--sub)}
+.row .spd{font-size:16px;font-weight:700;color:var(--purple);
+  font-variant-numeric:tabular-nums}
+.row.miss{opacity:.62}
+.history-shell{background:var(--card2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.history-head{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);color:var(--sub);font-size:11.5px;background:#202833}.history-head b{color:var(--txt)}
+.history-scroll{height:520px;max-height:72vh;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 10px;scrollbar-gutter:stable}.history-scroll .row{min-height:58px;padding:8px 0}
+.history-scroll::-webkit-scrollbar{width:8px}.history-scroll::-webkit-scrollbar-track{background:#1A2029}.history-scroll::-webkit-scrollbar-thumb{background:#495668;border-radius:8px;border:2px solid #1A2029}
+
+/* ===================== 提示 ===================== */
+.tip{background:#1E2A38;border-left:4px solid var(--accent);border-radius:9px;
+  padding:12px 14px;font-size:12.5px;color:#B8C6D6;line-height:1.75;margin-top:12px}
+.tip.w{background:#2E2119;border-color:var(--warn);color:#E0C4A8}
+.tip b{color:var(--txt)}
+.empty{text-align:center;color:var(--sub);padding:34px 12px;font-size:13.5px;line-height:1.9}
+.ft{text-align:center;font-size:11px;color:#5A6674;margin-top:22px;line-height:1.8}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>羽毛球实时统计</h1>
+  <div class="st"><span class="dot" id="dot"></span><span id="stx">未连接</span></div>
+</div>
+
+<div class="wrap">
+
+  <!-- ========== 未连接时 ========== -->
+  <div id="pre">
+    <button class="btn" id="btnConn">连接传感器</button>
+    <div class="tip">
+      <b>使用前提</b><br>
+      本页需要 Web Bluetooth。iPhone 上请用 <b>Bluefy</b> 浏览器打开
+      （App Store 免费）；Safari 不支持。<br>
+      Android 用 Chrome 直接打开即可。
+    </div>
+    <div class="tip w">
+      <b>连接前</b><br>
+      ① 传感器电源打开<br>
+      ② 按一下记录键开始录制（LED 常亮）<br>
+      ③ 再点上方「连接传感器」
+    </div>
+  </div>
+
+  <!-- ========== 已连接时 ========== -->
+  <div id="main" class="hide">
+
+    <div class="card">
+      <h2>本场统计</h2>
+      <div class="grid">
+        <div class="cell c-total"><b id="vTotal">0</b><span>总击球</span></div>
+        <div class="cell c-smash"><b id="vSmash">0</b><span>杀球</span></div>
+        <div class="cell c-spd"><b id="vSpd">0</b><span>最快 km/h</span></div>
+      </div>
+      <div class="grid" style="margin-top:9px">
+        <div class="cell c-over"><b id="vOver">0</b><span>上手球</span></div>
+        <div class="cell c-under"><b id="vUnder">0</b><span>下手球</span></div>
+        <div class="cell c-flat"><b id="vFlat">0</b><span>平抽球</span></div>
+      </div>
+      <div class="grid" style="margin-top:9px">
+        <div class="cell c-back"><b id="vBack">0</b><span>反手球</span></div>
+        <div class="cell c-miss"><b id="vMiss">0</b><span>空挥事件</span></div>
+        <div class="cell c-event"><b id="vEvents">0</b><span>挥拍事件</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>拍头速度趋势</h2>
+      <canvas id="cLine" height="150" data-logical-height="150"></canvas>
+      <div class="lg">
+        <span><i style="background:var(--purple)"></i>每拍速度</span>
+        <span><i style="background:var(--ok)"></i>滑动平均</span>
+        <span><i style="background:var(--red)"></i>杀球</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>球路分布</h2>
+      <canvas id="cBar" height="150" data-logical-height="150"></canvas>
+      <div class="tip" style="margin-top:10px">普通上手球、杀球、下手球和平抽球为有效击球的互斥主分类，四项合计等于总击球数。</div>
+    </div>
+    <div class="card">
+      <h2>反手球拆解</h2>
+      <canvas id="cBack" height="150" data-logical-height="150"></canvas>
+      <div class="tip" style="margin-top:10px">反手上手球已排除反手杀球，因此四项合计等于本场统计中的反手球数量。</div>
+    </div>
+
+    <div class="card">
+      <h2>每分钟击球频率</h2>
+      <canvas id="cRate" height="110" data-logical-height="110"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>最近击球</h2>
+      <div class="history-shell"><div class="history-head"><b>挥拍事件记录</b><span id="historyCount">有效 0 · 空挥 0 · 共 0</span></div><div class="history-scroll"><div id="list"><div class="empty">等待挥拍数据…<br>挥一拍试试</div></div></div></div>
+    </div>
+
+    <button class="btn gray" id="btnCsv">导出 CSV</button>
+    <button class="btn red" id="btnDisc">断开连接</button>
+  </div>
+
+  <div class="ft">
+    数据来自传感器实时识别 · 原始波形完整存于设备 Flash<br>
+    回家可用 USB 或 WiFi 导出做深度分析
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+ *  协议常量（与固件严格对应）
+ * ========================================================================== */
+const SVC   = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const C_EVT = '6e400005-b5a3-f393-e0a9-e50e24dcca9e';
+const C_STA = '6e400006-b5a3-f393-e0a9-e50e24dcca9e';
+
+const TYPE = {1:'上手球', 2:'下手球', 3:'平抽球'};
+const COL  = {1:'#E8934A', 2:'#3FB874', 3:'#8A96A6', smash:'#E05555', back:'#3C8DDE'};
+
+let dev = null, strokes = [];
+let hasDeviceStats = false;
+
+/* ==========================================================================
+ *  BLE 连接
+ * ========================================================================== */
+function setStatus(txt, cls){
+  document.getElementById('stx').textContent = txt;
+  document.getElementById('dot').className = 'dot' + (cls ? ' ' + cls : '');
+}
+
+async function connect(){
+  if(!navigator.bluetooth){
+    alert('此浏览器不支持 Web Bluetooth。\n\niPhone 请改用 Bluefy 浏览器（App Store 免费搜索 Bluefy）。\nAndroid 请用 Chrome。');
+    return;
+  }
+  try{
+    setStatus('搜索设备…', 'busy');
+    dev = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SVC] }, { namePrefix: 'BD|' }],
+      optionalServices: [SVC]
+    });
+    dev.addEventListener('gattserverdisconnected', onDisc);
+
+    setStatus('连接中…', 'busy');
+    const srv = await dev.gatt.connect();
+    const s   = await srv.getPrimaryService(SVC);
+
+    const ce = await s.getCharacteristic(C_EVT);
+    await ce.startNotifications();
+    ce.addEventListener('characteristicvaluechanged', onEvent);
+
+    try{
+      const cs = await s.getCharacteristic(C_STA);
+      await cs.startNotifications();
+      cs.addEventListener('characteristicvaluechanged', onStats);
+    }catch(e){ /* 统计特征可选 */ }
+
+    setStatus('已连接 · ' + (dev.name || '传感器'), 'on');
+    document.getElementById('pre').classList.add('hide');
+    document.getElementById('main').classList.remove('hide');
+    redraw();
+  }catch(e){
+    setStatus('未连接');
+    if(e && e.name !== 'NotFoundError') alert('连接失败：' + e);
+  }
+}
+
+function onDisc(){
+  setStatus('连接已断开');
+  document.getElementById('dot').className = 'dot';
+}
+
+function disconnect(){
+  if(dev && dev.gatt.connected) dev.gatt.disconnect();
+  document.getElementById('pre').classList.remove('hide');
+  document.getElementById('main').classList.add('hide');
+  setStatus('未连接');
+}
+
+/* ==========================================================================
+ *  数据解析
+ * ========================================================================== */
+function onEvent(e){
+  const d = e.target.value;             // DataView, 16 字节
+  if(d.byteLength < 16) return;
+  const flags = d.getUint8(7);
+  const s = {
+    t     : d.getUint32(0, true) / 1000,      // 秒
+    index : d.getUint16(4, true),
+    type  : d.getUint8(6),
+    back  : !!(flags & 0x01),
+    smash : !!(flags & 0x02),
+    hit   : !!(flags & 0x04),
+    spd   : d.getUint16(8, true) / 10,        // km/h
+    acc   : d.getUint16(10, true) / 100,      // g
+    gyro  : d.getUint16(12, true) / 100,      // rad/s
+    elev  : d.getInt16(14, true) / 10         // 度
+  };
+  strokes.push(s);
+  if(strokes.length > 600) strokes.shift();
+  redraw();
+}
+
+function onStats(e){
+  const d = e.target.value;             // 12 字节
+  if(d.byteLength < 12) return;
+  hasDeviceStats = true;
+  const total=d.getUint16(0,true),over=d.getUint16(2,true),under=d.getUint16(4,true),back=d.getUint16(6,true),smash=d.getUint16(8,true);
+  setVal('vTotal',total);setVal('vOver',over);setVal('vUnder',under);setVal('vFlat',Math.max(0,total-over-under));setVal('vBack',back);setVal('vSmash',smash);setVal('vSpd',(d.getUint16(10,true)/10).toFixed(0));const miss=strokes.filter(s=>!s.hit).length;setVal('vMiss',miss);setVal('vEvents',total+miss);
+}
+const setVal = (id, v) => document.getElementById(id).textContent = v;
+
+/* ==========================================================================
+ *  绘图工具（原生 Canvas，不依赖任何 CDN，可离线）
+ * ========================================================================== */
+function prep(cv){
+  const r=Math.max(1,Math.min(4,window.devicePixelRatio||1)),h=Number(cv.dataset.logicalHeight)||150,w=Math.max(1,cv.getBoundingClientRect().width||cv.clientWidth||1),pw=Math.round(w*r),ph=Math.round(h*r);
+  cv.style.width='100%';cv.style.height=h+'px';if(cv.width!==pw||cv.height!==ph){cv.width=pw;cv.height=ph;}const g=cv.getContext('2d');g.setTransform(r,0,0,r,0,0);g.clearRect(0,0,w,h);return {g,w,h};
+}
+
+/* ---------- 速度趋势折线 ---------- */
+function drawLine(){
+  const cv = document.getElementById('cLine');
+  const { g, w, h } = prep(cv);
+  const hits = strokes.filter(s => s.hit);
+  if(!hits.length){ emptyHint(g, w, h); return; }
+
+  const P = { l: 34, r: 10, t: 12, b: 20 };
+  const W = w - P.l - P.r, H = h - P.t - P.b;
+  const vals = hits.map(s => s.spd);
+  let mx = Math.max(...vals) * 1.12, mn = 0;
+  if(mx < 10) mx = 10;
+
+  const X = i => P.l + (hits.length === 1 ? W/2 : i / (hits.length - 1) * W);
+  const Y = v => P.t + H - (v - mn) / (mx - mn) * H;
+
+  // 网格 + Y 轴标签
+  g.strokeStyle = '#2C3644'; g.lineWidth = 1;
+  g.fillStyle = '#8A96A6'; g.font = '10px -apple-system,sans-serif';
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  for(let i = 0; i <= 3; i++){
+    const v = mn + (mx - mn) * i / 3, y = Y(v);
+    g.beginPath(); g.moveTo(P.l, y); g.lineTo(w - P.r, y); g.stroke();
+    g.fillText(v.toFixed(0), P.l - 5, y);
+  }
+
+  // 折线
+  g.strokeStyle = '#A57BD8'; g.lineWidth = 2;
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  g.beginPath();
+  hits.forEach((s, i) => i ? g.lineTo(X(i), Y(s.spd)) : g.moveTo(X(i), Y(s.spd)));
+  g.stroke();
+
+  // 滑动平均
+  if(hits.length >= 5){
+    const win = Math.max(3, Math.floor(hits.length / 8));
+    g.strokeStyle = '#3FB874'; g.lineWidth = 1.8; g.beginPath();
+    hits.forEach((s, i) => {
+      const a = Math.max(0, i - win), b = Math.min(hits.length - 1, i + win);
+      let sum = 0;
+      for(let k = a; k <= b; k++) sum += hits[k].spd;
+      const m = sum / (b - a + 1);
+      i ? g.lineTo(X(i), Y(m)) : g.moveTo(X(i), Y(m));
+    });
+    g.stroke();
+  }
+
+  // 杀球标记
+  hits.forEach((s, i) => {
+    if(!s.smash) return;
+    g.fillStyle = '#E05555';
+    g.beginPath(); g.arc(X(i), Y(s.spd), 3.4, 0, 7); g.fill();
+  });
+
+  // X 轴
+  g.fillStyle = '#8A96A6'; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillText('第 1 拍', P.l + 14, h - 15);
+  g.fillText('第 ' + hits.length + ' 拍', w - P.r - 20, h - 15);
+}
+
+/* ---------- 球路分布横向柱状 ---------- */
+function drawBar(){
+  const cv = document.getElementById('cBar');
+  const { g, w, h } = prep(cv);
+  const hits = strokes.filter(s => s.hit);
+  if(!hits.length){ emptyHint(g, w, h); return; }
+
+  const items = [
+    ['普通上手球', hits.filter(s => s.type === 1 && !s.smash).length, COL[1]],
+    ['杀球', hits.filter(s => s.smash).length, COL.smash],
+    ['下手球', hits.filter(s => s.type === 2).length, COL[2]],
+    ['平抽球', hits.filter(s => s.type === 3).length, COL[3]],
+  ];
+  const mx = Math.max(1, ...items.map(v => v[1]));
+  const L = 82, R = 42, BH = 18, GAP = 10;
+  const top = (h - (items.length * (BH + GAP) - GAP)) / 2;
+
+  g.font = '12px -apple-system,sans-serif'; g.textBaseline = 'middle';
+  items.forEach((it, i) => {
+    const y = top + i * (BH + GAP);
+    g.fillStyle = '#8A96A6'; g.textAlign = 'right';
+    g.fillText(it[0], L - 8, y + BH/2);
+
+    g.fillStyle = '#222A35';
+    rr(g, L, y, w - L - R, BH, 4); g.fill();
+
+    const bw = (w - L - R) * it[1] / mx;
+    if(bw > 0.5){ g.fillStyle = it[2]; rr(g, L, y, bw, BH, 4); g.fill(); }
+
+    g.fillStyle = '#E8EDF2'; g.textAlign = 'left';
+    g.fillText(it[1], w - R + 6, y + BH/2);
+  });
+}
+
+/* ---------- 反手球拆解 ---------- */
+function drawBackhand(){
+  const cv=document.getElementById('cBack'),{g,w,h}=prep(cv),hits=strokes.filter(s=>s.hit&&s.back);
+  const items=[
+    ['反手上手球',hits.filter(s=>s.type===1&&!s.smash).length,COL[1]],
+    ['反手杀球',hits.filter(s=>s.smash).length,COL.smash],
+    ['反手下手球',hits.filter(s=>s.type===2).length,COL[2]],
+    ['反手平抽',hits.filter(s=>s.type===3).length,COL[3]]
+  ],mx=Math.max(1,...items.map(v=>v[1])),L=82,R=42,BH=18,GAP=10,top=(h-(items.length*(BH+GAP)-GAP))/2;
+  g.font='12px -apple-system,sans-serif';g.textBaseline='middle';items.forEach((it,i)=>{const y=top+i*(BH+GAP);g.fillStyle='#8A96A6';g.textAlign='right';g.fillText(it[0],L-8,y+BH/2);g.fillStyle='#222A35';rr(g,L,y,w-L-R,BH,4);g.fill();const bw=(w-L-R)*it[1]/mx;if(bw>.5){g.fillStyle=it[2];rr(g,L,y,bw,BH,4);g.fill();}g.fillStyle='#E8EDF2';g.textAlign='left';g.fillText(it[1],w-R+6,y+BH/2);});
+}
+
+/* ---------- 每分钟频率柱状 ---------- */
+function drawRate(){
+  const cv = document.getElementById('cRate');
+  const { g, w, h } = prep(cv);
+  const hits = strokes.filter(s => s.hit);
+  if(hits.length < 2){ emptyHint(g, w, h); return; }
+
+  const dur = hits[hits.length - 1].t;
+  const nbin = Math.max(1, Math.ceil(dur / 60));
+  const bins = new Array(nbin).fill(0);
+  hits.forEach(s => { const b = Math.min(nbin - 1, Math.floor(s.t / 60)); bins[b]++; });
+
+  const P = { l: 28, r: 8, t: 10, b: 18 };
+  const W = w - P.l - P.r, H = h - P.t - P.b;
+  const mx = Math.max(1, ...bins);
+  const bw = Math.min(30, W / nbin * 0.68);
+
+  g.strokeStyle = '#2C3644'; g.lineWidth = 1;
+  g.fillStyle = '#8A96A6'; g.font = '10px -apple-system,sans-serif';
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  [0, mx].forEach(v => {
+    const y = P.t + H - v / mx * H;
+    g.beginPath(); g.moveTo(P.l, y); g.lineTo(w - P.r, y); g.stroke();
+    g.fillText(v, P.l - 5, y);
+  });
+
+  g.textAlign = 'center';
+  bins.forEach((v, i) => {
+    const cx = P.l + (i + 0.5) * (W / nbin);
+    const bh = v / mx * H;
+    g.fillStyle = '#3C8DDE';
+    rr(g, cx - bw/2, P.t + H - bh, bw, Math.max(bh, 1.5), 3); g.fill();
+    g.fillStyle = '#8A96A6'; g.textBaseline = 'top';
+    g.fillText((i + 1) + '分', cx, h - 14);
+  });
+}
+
+function rr(g, x, y, w, h, r){
+  r = Math.min(r, w/2, h/2);
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function emptyHint(g, w, h){
+  g.fillStyle = '#5A6674';
+  g.font = '12.5px -apple-system,sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('等待数据…', w/2, h/2);
+}
+
+/* ==========================================================================
+ *  列表
+ * ========================================================================== */
+function drawList(){
+  const box=document.getElementById('list'),counter=document.getElementById('historyCount'),records=strokes.slice().reverse(),valid=strokes.filter(s=>s.hit).length,miss=strokes.length-valid;counter.textContent=`有效 ${valid} · 空挥 ${miss} · 共 ${records.length}`;
+  if(!records.length){box.innerHTML='<div class="empty">等待挥拍数据…<br>挥一拍试试</div>';return;}
+  box.innerHTML=records.map(s=>{let label,color;if(!s.hit){label='空挥';color='#E8934A';}else if(s.smash){label=s.back?'反手杀':'杀球';color=COL.smash;}else if(s.back){label='反手';color=COL.back;}else{label=TYPE[s.type]||'未知';color=COL[s.type]||'#8A96A6';}const mm=String(Math.floor(s.t/60)).padStart(2,'0'),ss=String(Math.floor(s.t%60)).padStart(2,'0');return `<div class="row${s.hit?'':' miss'}"><div class="tag" style="background:${color}">${label}</div><div class="mid"><b>${mm}:${ss}</b><span>第 ${s.index} 个挥拍事件 · 峰值 ${s.acc.toFixed(1)}g · 仰角 ${s.elev.toFixed(0)}°</span></div><div class="spd">${s.spd.toFixed(0)}</div></div>`;}).join('');
+}
+
+function redraw(){
+  drawLine();drawBar();drawBackhand();drawRate();drawList();const hits=strokes.filter(s=>s.hit),miss=strokes.length-hits.length,sm=hits.filter(s=>s.smash).length,ov=hits.filter(s=>s.type===1).length,un=hits.filter(s=>s.type===2).length,fl=hits.filter(s=>s.type===3).length,bk=hits.filter(s=>s.back).length;
+  if(!hasDeviceStats){setVal('vTotal',hits.length);setVal('vSmash',sm);setVal('vOver',ov);setVal('vUnder',un);setVal('vFlat',fl);setVal('vBack',bk);setVal('vSpd',hits.length?Math.max(...hits.map(s=>s.spd)).toFixed(0):0);}setVal('vMiss',miss);setVal('vEvents',hits.length+miss);
+}
+
+/* ==========================================================================
+ *  CSV 导出
+ * ========================================================================== */
+function exportCsv(){
+  if(!strokes.length){ alert('还没有数据'); return; }
+  const head = '序号,时间_s,类别,击中球,拍头速度_kmh,峰值加速度_g,峰值角速度_rads,仰角_deg\n';
+  const body = strokes.map(s => {
+    let label = s.smash ? (s.back ? '反手杀球' : '杀球')
+                        : (s.back ? '反手' : '') + (TYPE[s.type] || '');
+    return [s.index, s.t.toFixed(3), label, s.hit ? 1 : 0,
+            s.spd.toFixed(1), s.acc.toFixed(2), s.gyro.toFixed(2),
+            s.elev.toFixed(1)].join(',');
+  }).join('\n');
+  // BOM 让 Excel 正确识别 UTF-8
+  const blob = new Blob(['\uFEFF' + head + body], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'badminton_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'') + '.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+/* ==========================================================================
+ *  事件绑定
+ * ========================================================================== */
+document.getElementById('btnConn').onclick = connect;
+document.getElementById('btnDisc').onclick = disconnect;
+document.getElementById('btnCsv').onclick  = exportCsv;
+window.addEventListener('resize', () => { if(strokes.length) redraw(); });
+
+// 演示模式：网址后加 ?demo=1 可在没有设备时预览界面
+if(new URLSearchParams(location.search).get('demo')){
+  document.getElementById('pre').classList.add('hide');
+  document.getElementById('main').classList.remove('hide');
+  setStatus('演示模式', 'on');
+  let i = 0, t = 0;
+  setInterval(() => {
+    if(i > 60) return;
+    t += 1.2 + Math.random() * 2.5;
+    const r = Math.random();
+    const type = r < .45 ? 1 : r < .8 ? 2 : 3;
+    const smash = type === 1 && Math.random() < .35;
+    const base = smash ? 250 : type === 1 ? 180 : 120;
+    strokes.push({
+      t, index: ++i, type,
+      back: Math.random() < .2, smash, hit: Math.random() > .08,
+      spd: base + Math.random() * 60,
+      acc: (smash ? 9 : 5) + Math.random() * 3,
+      gyro: (smash ? 26 : 16) + Math.random() * 5,
+      elev: type === 1 ? 40 + Math.random() * 25 : -20 + Math.random() * 20
+    });
+    redraw();
+  }, 700);
+}
+</script>
+</body>
+</html>
